@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@plugin "daisyui" {
+  themes: false;
+}
+
+@plugin "daisyui/theme" {
+  name: "hallyu";
+  default: true;
+  color-scheme: dark;
+  --color-base-100: #0b0710;
+  --color-base-200: #150d1d;
+  --color-base-300: #1f1428;
+  --color-base-content: #f5eef3;
+  --color-primary: #ff4d8d;
+  --color-primary-content: #ffffff;
+  --color-secondary: #c026d3;
+  --color-accent: #ff8fb8;
+  --color-neutral: #2a1f33;
+  --color-neutral-content: #a89aa6;
+  --radius-selector: 1rem;
+  --radius-field: 2rem;
+  --radius-box: 1.125rem;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-family: Urbanist, sans-serif;
+}
+
+div p{
+  font-family: Cormorant Garamond, serif;
+  font-weight: 600;
+}
+
+/* ambient glow blobs behind the glass */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  z-index: -1;
+}
+body::before { width: 50vw; height: 50vw; background: #ff4d8d33; top: -15vw; right: -10vw; }
+body::after  { width: 40vw; height: 40vw; background: #7b2ff733; bottom: -15vw; left: -10vw; }
+
+.glass {
+  background: rgb(255 255 255 / 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgb(255 255 255 / 0.12);
+}
