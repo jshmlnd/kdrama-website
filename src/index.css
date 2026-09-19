@@ -1,38 +1,36 @@
 @import "tailwindcss";
 
-@plugin "daisyui" {
-  themes: false;
-}
-
-@plugin "daisyui/theme" {
-  name: "hallyu";
-  default: true;
-  color-scheme: dark;
-  --color-base-100: #0b0710;
-  --color-base-200: #150d1d;
-  --color-base-300: #1f1428;
+@theme {
   --color-base-content: #f5eef3;
   --color-primary: #ff4d8d;
   --color-primary-content: #ffffff;
-  --color-secondary: #c026d3;
-  --color-accent: #ff8fb8;
-  --color-neutral: #2a1f33;
   --color-neutral-content: #a89aa6;
-  --radius-selector: 1rem;
-  --radius-field: 2rem;
-  --radius-box: 1.125rem;
+  --font-urbanist: Urbanist, sans-serif;
+  --font-garamond: Cormorant Garamond, serif;
+}
+
+:root {
+  color-scheme: dark;
 }
 
 body {
   min-height: 100vh;
   overflow-x: hidden;
-  font-family: Urbanist, sans-serif;
+  color: var(--color-base-content);
+  font-family: var(--font-urbanist);
+  background:
+    radial-gradient(circle at 82% -10%, rgb(255 77 141 / 0.12), transparent 32rem),
+    radial-gradient(circle at -10% 75%, rgb(123 47 247 / 0.1), transparent 30rem),
+    #0b0710;
 }
 
-div p{
-  font-family: Cormorant Garamond, serif;
-  font-weight: 600;
-}
+html { scroll-behavior: smooth; }
+
+button, a { -webkit-tap-highlight-color: transparent; }
+
+button { cursor: pointer; }
+
+::selection { background: rgb(255 77 141 / 0.35); color: white; }
 
 /* ambient glow blobs behind the glass */
 body::before,
@@ -43,8 +41,8 @@ body::after {
   filter: blur(120px);
   z-index: -1;
 }
-body::before { width: 50vw; height: 50vw; background: #ff4d8d33; top: -15vw; right: -10vw; }
-body::after  { width: 40vw; height: 40vw; background: #7b2ff733; bottom: -15vw; left: -10vw; }
+body::before { width: 38vw; height: 38vw; background: #ff4d8d1f; top: 12rem; right: -22vw; }
+body::after  { width: 32vw; height: 32vw; background: #7b2ff71c; bottom: 8rem; left: -20vw; }
 
 .glass {
   background: rgb(255 255 255 / 0.06);
@@ -52,3 +50,34 @@ body::after  { width: 40vw; height: 40vw; background: #7b2ff733; bottom: -15vw; 
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgb(255 255 255 / 0.12);
 }
+
+.font-display { font-family: var(--font-garamond); }
+
+.site-nav { box-shadow: 0 12px 35px rgb(0 0 0 / 0.18); }
+
+.hero-shell { isolation: isolate; }
+
+.hero-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}
+
+.section-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--color-primary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }

@@ -1,61 +1,88 @@
-// ponytail: API data endpoints currently 500 (worker-side); mock list is the
-// fallback. Remove fallback + hue gradients when the API is stable.
-const API = 'https://kdramaapi.joshuaklein-malonda.workers.dev';
+export const API = 'https://kdramaapi.joshuaklein-malonda.workers.dev';
 
-const mock = [
-  { id: 1,  title: 'Crash Landing on You', year: 2019, genre: 'Romance',        rating: 9.1, hue: 340 },
-  { id: 2,  title: 'Vincenzo',             year: 2021, genre: 'Crime Comedy',   rating: 8.9, hue: 280 },
-  { id: 3,  title: 'Squid Game',           year: 2021, genre: 'Thriller',       rating: 8.7, hue: 200 },
-  { id: 4,  title: 'Goblin',               year: 2016, genre: 'Fantasy',        rating: 9.2, hue: 250 },
-  { id: 5,  title: 'Business Proposal',    year: 2022, genre: 'Rom-com',        rating: 8.5, hue: 320 },
-  { id: 6,  title: 'My Mister',            year: 2018, genre: 'Drama',          rating: 9.3, hue: 220 },
-  { id: 7,  title: 'Kingdom',              year: 2019, genre: 'Historical',     rating: 8.8, hue: 0   },
-  { id: 8,  title: 'Hometown Cha-Cha-Cha', year: 2021, genre: 'Slice of Life',  rating: 8.6, hue: 160 },
-  { id: 9,  title: 'Itaewon Class',        year: 2020, genre: 'Drama',          rating: 8.4, hue: 30  },
-  { id: 10, title: 'Alchemy of Souls',     year: 2022, genre: 'Fantasy',        rating: 8.7, hue: 260 },
-  { id: 11, title: 'Twenty-Five Twenty-One', year: 2022, genre: 'Coming-of-age', rating: 8.9, hue: 300 },
-  { id: 12, title: 'The Glory',            year: 2022, genre: 'Revenge',        rating: 8.8, hue: 350 },
-];
+function request(path, { signal, timeout = 10000, base = API } = {}) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeout);
+  const abort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
 
-function hueOf(title) {
-  let s = 0;
-  for (const c of title) s += c.charCodeAt(0);
-  return s % 360;
+  return fetch(`${base}${path}`, { signal: controller.signal })
+    .then((response) => {
+      if (!response.ok) throw new Error(`API ${response.status}`);
+      return response.json();
+    })
+    .catch((error) => {
+      if (timedOut) throw new Error('Request timed out');
+      throw error;
+    })
+    .finally(() => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+    });
 }
 
-function toDrama(x) {
+function normalizeEpisode(episode) {
   return {
-    id: x.id,
-    title: x.title ?? x.name ?? '',
-    year: Number(x.year) || null,
-    rating: Number(x.rating) || null,
-    genre: Array.isArray(x.genre) ? x.genre.join(', ') : (x.genre ?? ''),
-    image: x.image ?? x.cover ?? x.poster ?? null,
-    hue: x.hue ?? hueOf(x.title ?? ''),
+    id: episode?.id ?? episode?.episodeId ?? episode?.streamId ?? null,
+    url: typeof episode?.url === 'string' ? episode.url : '',
+    number: String(episode?.number ?? episode?.episode ?? ''),
   };
 }
 
-async function get(path) {
-  const r = await fetch(API + path);
-  if (!r.ok) throw new Error(`API ${r.status}`);
-  return r.json();
+export function normalizeDrama(drama, fallbackSlug = '') {
+  const genres = Array.isArray(drama?.genres)
+    ? drama.genres.filter(Boolean).map(String)
+    : Array.isArray(drama?.genre)
+      ? drama.genre.filter(Boolean).map(String)
+      : drama?.genre
+        ? [String(drama.genre)]
+        : [];
+
+  return {
+    slug: String(drama?.slug ?? drama?.id ?? fallbackSlug),
+    title: String(drama?.title ?? drama?.name ?? 'Untitled drama'),
+    year: drama?.year ? String(drama.year) : '',
+    genres,
+    status: drama?.status ?? '',
+    image: drama?.thumbnail ?? drama?.image ?? drama?.cover ?? drama?.poster ?? '',
+    synopsis: drama?.synopsis ?? drama?.description ?? '',
+    network: drama?.network ?? '',
+    country: drama?.country ?? '',
+    episodes: Array.isArray(drama?.episodes)
+      ? drama.episodes.map(normalizeEpisode).sort((a, b) => Number(a.number || Infinity) - Number(b.number || Infinity))
+      : [],
+  };
 }
 
-export async function fetchList() {
-  try {
-    const data = await get('/list?page=1&type=1&country=0&order=1');
-    const list = Array.isArray(data) ? data : (data.data ?? data.list ?? data.items ?? []);
-    return list.map(toDrama);
-  } catch {
-    return mock.map(toDrama);
-  }
+export async function fetchCatalog(options) {
+  const data = await request('/drama', options);
+  const list = Array.isArray(data) ? data : data?.dramas;
+  if (!Array.isArray(list)) throw new Error('Invalid catalog response');
+  return list.map((drama) => normalizeDrama(drama)).filter((drama) => drama.slug && drama.title);
 }
 
-export async function fetchDrama(id) {
-  try {
-    return toDrama(await get(`/drama/${id}`));
-  } catch {
-    const m = mock.find((x) => String(x.id) === String(id));
-    return m ? toDrama(m) : null;
-  }
+export async function fetchDrama(slug, options) {
+  if (!slug) return null;
+  return normalizeDrama(await request(`/drama/${encodeURIComponent(slug)}`, options), slug);
+}
+
+export function proxyStreamUrl(url) {
+  return typeof url === 'string' && url ? url : null;
+}
+
+export async function fetchStream(epId, options) {
+  if ((typeof epId !== 'string' && typeof epId !== 'number') || !String(epId).trim()) return null;
+  const data = await request(`/stream/${encodeURIComponent(String(epId))}`, options);
+  return typeof data?.url === 'string' ? proxyStreamUrl(data.url) : null;
+}
+
+export async function resolveEpisodeStream(episodeUrl, options) {
+  if (typeof episodeUrl !== 'string' || !episodeUrl) return null;
+  const data = await request(`/api/stream?episode=${encodeURIComponent(episodeUrl)}`, { ...options, base: '' });
+  return typeof data?.url === 'string' ? { url: data.url, subtitles: Array.isArray(data.subtitles) ? data.subtitles : [] } : null;
 }
