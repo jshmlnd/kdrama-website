@@ -32,6 +32,18 @@ button { cursor: pointer; }
 
 ::selection { background: rgb(255 77 141 / 0.35); color: white; }
 
+/* custom scrollbar: dark thin track, primary-pink thumb */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #ff4d8d rgb(255 255 255 / 0.08);
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: rgb(255 255 255 / 0.06); border-radius: 8px; }
+::-webkit-scrollbar-thumb { background: #ff4d8d; border-radius: 8px; border: 2px solid #0b0710; }
+::-webkit-scrollbar-thumb:hover { background: #ff679c; }
+::-webkit-scrollbar-corner { background: transparent; }
+
 /* ambient glow blobs behind the glass */
 body::before,
 body::after {

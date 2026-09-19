@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowUpRight, CircleCheckBig, Play, Star } from 'lucide-react';
+import { ArrowUpRight, CircleCheckBig, Heart, Play, Star } from 'lucide-react';
 import { Link } from 'react-router';
 import { fetchDrama } from '../lib/api.js';
 import { routes } from '../lib/routes.js';
@@ -45,7 +45,7 @@ export default function Hero({ drama, total = 0 }) {
           <div className="mt-8 flex flex-wrap gap-x-4 gap-y-2 border-t border-white/10 pt-5 text-xs text-neutral-content sm:mt-10 sm:gap-6 sm:pt-6 sm:text-sm">
             <span><strong className="mr-1 text-white">{total || '...'}</strong> dramas in the collection</span>
             <span><strong className="mr-1 text-white">Live</strong> drama updates</span>
-            <span className="flex items-center gap-1"><Star size={14} className="fill-primary text-primary" /> Curated for Jimei</span>
+            <span className="flex items-center gap-1"><Heart size={14} className="fill-primary text-primary" /> Made for <span className='text-primary'>Jimei</span></span>
           </div>
         </div>
 

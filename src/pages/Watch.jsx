@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
-import { ArrowLeft, Check, ChevronDown, Info, Link2, LockKeyhole, Play, Send, Share2, Star } from 'lucide-react';
+import { ArrowLeft, Check, Info, Link2, LockKeyhole, Play, Send, Share2, Star } from 'lucide-react';
 import { fetchDrama, fetchStream, resolveEpisodeStream } from '../lib/api.js';
 import Nav from '../components/Nav.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
@@ -114,7 +114,8 @@ export default function Watch({ ...navProps }) {
             </section>
 
             <aside className="glass h-fit rounded-2xl p-4 sm:p-5">
-              <div className="flex items-center justify-between"><div><p className="text-sm font-bold text-white">Episodes</p><p className="mt-1 text-xs text-neutral-content">{drama.episodes.length} available</p></div><span className="rounded-lg border border-white/10 px-2.5 py-2 text-xs text-neutral-content">Season 1 <ChevronDown size={13} className="ml-1 inline" /></span></div>
+              {/* ponytail: /drama/:slug returns one flat season list; render a real season selector when the API exposes seasons */}
+              <div className="flex items-center justify-between"><div><p className="text-sm font-bold text-white">Episodes</p><p className="mt-1 text-xs text-neutral-content">{drama.episodes.length} available</p></div><span className="rounded-lg border border-white/10 px-2.5 py-2 text-xs text-neutral-content">Season 1</span></div>
               <div className="mt-5 max-h-[31rem] space-y-1.5 overflow-y-auto pr-1">
                 {drama.episodes.map((episode, index) => {
                   const number = episode.number || String(index + 1);
@@ -122,7 +123,7 @@ export default function Watch({ ...navProps }) {
                   return <Link key={`${episode.url}-${number}`} to={routes.watch(slug, number)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${active ? 'bg-primary/12 text-white' : 'text-neutral-content hover:bg-white/6 hover:text-white'}`}><span className={`grid size-7 place-items-center rounded-lg text-xs font-bold ${active ? 'bg-primary text-primary-content' : 'bg-white/7'}`}>{active ? <Check size={14} /> : number}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">Episode {number}</span><span className="mt-0.5 block text-[10px] opacity-70">{episode.id ? 'Stream available' : 'Stream Available'}</span></span>{active && <Play size={13} fill="currentColor" />}</Link>;
                 })}
               </div>
-              <p className="mt-4 flex items-center gap-1.5 px-2 text-[10px] leading-4 text-neutral-content"><Star size={12} /> Select an episode to update the player.</p>
+              <p className="mt-4 flex items-center gap-1.5 px-2 text-[10px] leading-4 text-neutral-content">Select an episode.</p>
             </aside>
           </div>
         )}
