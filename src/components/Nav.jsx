@@ -8,7 +8,7 @@ export default function Nav({ query = '', onQuery }) {
   const links = [['Discover', routes.discover], ['Genres', routes.genres], ['My list', routes.myList]];
 
   return (
-    <nav className="site-nav glass sticky top-4 z-20 mx-4 mt-4 flex max-w-7xl flex-wrap items-center gap-3 rounded-2xl px-3 py-3 sm:px-5 xl:mx-auto">
+    <nav className="site-nav glass backdrop-blur-xl sticky top-4 z-20 mx-4 mt-4 flex max-w-7xl flex-wrap items-center gap-3 rounded-2xl px-3 py-3 sm:px-5 xl:mx-auto">
       <div className="flex items-center gap-4">
         <Link to={routes.home} className="flex shrink-0 items-center gap-2.5 text-lg font-extrabold tracking-tight text-white" onClick={() => setMenuOpen(false)}>
           <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-content shadow-[0_0_24px_rgba(255,77,141,0.3)]"><Crown size={19} /></span>
