@@ -90,7 +90,7 @@ export default function Watch({ ...navProps }) {
                   <div className="min-w-0"><p className="truncate text-sm font-bold text-white">{drama.title}</p><p className="mt-0.5 text-[11px] text-neutral-content">Episode {activeEpisode?.number || '-'} · {drama.status || 'Catalog title'}</p></div>
                   <button type="button" aria-label="Share episode" onClick={shareEpisode} className="grid size-9 place-items-center rounded-lg text-neutral-content transition hover:bg-white/8 hover:text-white"><Share2 size={16} /></button>
                 </div>
-                {src && !playerError ? <VideoPlayer title={`${drama.title} episode ${activeEpisode?.number || ''}`} src={src} subtitles={subtitles} onError={() => setPlayerError(true)} /> : (
+                {src && !playerError ? <VideoPlayer title={`${drama.title} episode ${activeEpisode?.number || ''}`} src={src} subtitles={subtitles} onError={() => setPlayerError(true)} onNotify={navProps.onNotify} /> : (
                   <div className="relative grid aspect-video place-items-center overflow-hidden bg-[#0d0911] p-6 text-center">
                     <div className="absolute size-64 rounded-full bg-primary/10 blur-3xl" />
                     <div className="relative max-w-sm">

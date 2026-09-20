@@ -22,7 +22,7 @@ export default function Nav({ query = '', onQuery }) {
       {onQuery && (
         <label className="order-3 flex h-10 basis-full items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-neutral-content transition focus-within:border-primary/60 focus-within:bg-white/8 md:order-none md:ml-auto md:w-full md:max-w-xs md:basis-auto">
           <Search size={16} />
-          <input type="search" value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Search a title..." aria-label="Search dramas" className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-neutral-content/70" />
+          <input type="search" value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Search a title..." aria-label="Search dramas" className="min-w-0 flex-1 bg-transparent text-base text-white outline-none placeholder:text-neutral-content/70 sm:text-sm" />
         </label>
       )}
 

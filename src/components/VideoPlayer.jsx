@@ -11,7 +11,7 @@ function formatTime(value) {
   return hours ? `${hours}:${String(minutes % 60).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`;
 }
 
-export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama player', onError }) {
+export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama player', onError, onNotify }) {
   const shellRef = useRef(null);
   const videoRef = useRef(null);
   const hideTimer = useRef(null);
@@ -130,10 +130,25 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
   }, [captions, subtitles, src]);
 
   useEffect(() => {
-    const onFullscreen = () => setFullscreen(Boolean(document.fullscreenElement));
+    const onFullscreen = () => setFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement));
     document.addEventListener('fullscreenchange', onFullscreen);
+    document.addEventListener('webkitfullscreenchange', onFullscreen);
     return () => document.removeEventListener('fullscreenchange', onFullscreen);
   }, []);
+
+  const lastTap = useRef(0);
+
+  function handleVideoTap() {
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      lastTap.current = 0;
+      toggleFullscreen();
+      return;
+    }
+    // ponytail: single tap plays immediately, double tap fullscreen — no YouTube-style delay
+    lastTap.current = now;
+    togglePlay();
+  }
 
   function togglePlay() {
     const video = videoRef.current;
@@ -170,9 +185,17 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
   }
 
   async function toggleFullscreen() {
-    if (!shellRef.current) return;
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else await shellRef.current.requestFullscreen();
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      await document.exitFullscreen?.() ?? document.webkitExitFullscreen?.();
+      return;
+    }
+    // ponytail: iPhone Safari has no element fullscreen API; fall back to the native video fullscreen there
+    try {
+      if (shellRef.current?.requestFullscreen) await shellRef.current.requestFullscreen();
+      else videoRef.current?.webkitEnterFullscreen?.();
+    } catch {
+      onNotify?.('Fullscreen isn’t available on this device.');
+    }
   }
 
   function toggleCaptions() {
@@ -194,7 +217,7 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
 
   return (
     <div ref={shellRef} tabIndex="0" onKeyDown={handleKeyDown} onPointerMove={revealControls} onTouchStart={revealControls} onFocus={revealControls} className="group/player relative overflow-hidden bg-black outline-none focus-visible:ring-2 focus-visible:ring-primary">
-      <video ref={videoRef} aria-label={title} playsInline crossOrigin="anonymous" className="aspect-video w-full bg-black" onDoubleClick={toggleFullscreen}>
+      <video ref={videoRef} aria-label={title} playsInline crossOrigin="anonymous" onClick={handleVideoTap} className="aspect-video w-full bg-black" >
         {subtitles.map((subtitle) => <SubtitleTrack key={`${subtitle.lang}-${subtitle.url}`} subtitle={subtitle} />)}
       </video>
       <Subtitle text={captionText} />

@@ -35,7 +35,7 @@ export default function DramaCard({ drama, inList = false, onToggle }) {
         <div className="absolute inset-0" style={{ background: `linear-gradient(145deg, hsl(${hue} 45% 18%), hsl(${(hue + 55) % 360} 65% 38%), hsl(${(hue + 95) % 360} 70% 58%))` }} />
         {poster && <img src={poster} alt={`${drama.title} poster`} loading="lazy" className="relative h-full w-full object-cover opacity-85 mix-blend-screen transition duration-700 group-hover:scale-105 group-hover:opacity-100" />}
         <div className="absolute inset-0 bg-gradient-to-t from-[#120b18] via-transparent to-black/10" />
-        <div className="absolute inset-x-4 top-4 flex items-start justify-between gap-2">
+        <div className="absolute inset-x-4 top-4 z-10 flex items-start justify-between gap-2">
           <span className="rounded-full border border-white/15 bg-black/25 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white backdrop-blur-md">{drama.status || 'Drama'}</span>
           <button
             type="button"
@@ -53,7 +53,7 @@ export default function DramaCard({ drama, inList = false, onToggle }) {
             <span>{genre}</span>
           </div>
           <h3 className="font-display text-3xl leading-[0.95] text-white">{drama.title}</h3>
-          <Link to={routes.watch(drama.slug)} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white px-3.5 py-2 text-xs font-bold text-[#1a0e1d] transition sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100">
+          <Link to={routes.watch(drama.slug)} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white px-3.5 py-2 text-xs font-bold text-[#1a0e1d] transition after:absolute after:inset-0 after:rounded-2xl sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100">
             <Play size={13} fill="currentColor" /> Watch now
           </Link>
         </div>
