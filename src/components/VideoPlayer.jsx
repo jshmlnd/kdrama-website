@@ -108,7 +108,17 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    Array.from(video.textTracks).forEach((track) => { track.mode = captions ? 'hidden' : 'disabled'; });
+    // ponytail: iPhone native fullscreen bypasses our React overlay, so flip tracks to 'showing' for the system caption renderer there
+    const setMode = (native) => Array.from(video.textTracks).forEach((track) => { track.mode = !captions ? 'disabled' : native ? 'showing' : 'hidden'; });
+    setMode(Boolean(video.webkitDisplayingFullscreen));
+    const onBegin = () => setMode(true);
+    const onEnd = () => setMode(false);
+    video.addEventListener('webkitbeginfullscreen', onBegin);
+    video.addEventListener('webkitendfullscreen', onEnd);
+    return () => {
+      video.removeEventListener('webkitbeginfullscreen', onBegin);
+      video.removeEventListener('webkitendfullscreen', onEnd);
+    };
   }, [captions, subtitles]);
 
   useEffect(() => {
