@@ -13,7 +13,7 @@ export default function Hero({ drama, total = 0 }) {
     setPoster(drama?.image ?? '');
     if (!drama?.slug || drama.image) return undefined;
     const controller = new AbortController();
-    fetchDrama(drama.slug, { signal: controller.signal }).then((detail) => {
+    fetchDrama(drama.slug).then((detail) => {
       if (!controller.signal.aborted) setPoster(detail?.image ?? '');
     }).catch(() => {});
     return () => controller.abort();

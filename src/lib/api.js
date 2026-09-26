@@ -34,6 +34,17 @@ function normalizeEpisode(episode) {
   };
 }
 
+const cache = new Map();
+// ponytail: session-lifetime cache, no invalidation — catalog/detail data is stable within a visit
+function cached(key, load) {
+  if (!cache.has(key)) cache.set(key, load().catch((error) => { cache.delete(key); throw error; }));
+  return cache.get(key);
+}
+
+export function seasonFrom(name) {
+  return String(name ?? '').match(/season[-\s]?(\d+)/i)?.[1] ?? '';
+}
+
 export function normalizeDrama(drama, fallbackSlug = '') {
   const genres = Array.isArray(drama?.genres)
     ? drama.genres.filter(Boolean).map(String)
@@ -59,26 +70,40 @@ export function normalizeDrama(drama, fallbackSlug = '') {
   };
 }
 
-export async function fetchCatalog(options) {
-  const data = await request('/drama', options);
-  const list = Array.isArray(data) ? data : data?.dramas;
-  if (!Array.isArray(list)) throw new Error('Invalid catalog response');
-  return list.map((drama) => normalizeDrama(drama)).filter((drama) => drama.slug && drama.title);
+export function fetchCatalog() {
+  return cached('catalog', async () => {
+    const data = await request('/drama');
+    const list = Array.isArray(data) ? data : data?.dramas;
+    if (!Array.isArray(list)) throw new Error('Invalid catalog response');
+    return list.map((drama) => normalizeDrama(drama)).filter((drama) => drama.slug && drama.title);
+  });
 }
 
-export async function fetchDrama(slug, options) {
+export function fetchDrama(slug) {
   if (!slug) return null;
-  return normalizeDrama(await request(`/drama/${encodeURIComponent(slug)}`, options), slug);
+  return cached(`drama:${slug}`, async () => normalizeDrama(await request(`/drama/${encodeURIComponent(slug)}`), slug));
 }
 
 export function proxyStreamUrl(url) {
-  return typeof url === 'string' && url ? url : null;
+  return typeof url === 'string' && url ? `/api/stream?url=${encodeURIComponent(url)}` : null;
 }
 
 export async function fetchStream(epId, options) {
   if ((typeof epId !== 'string' && typeof epId !== 'number') || !String(epId).trim()) return null;
-  const data = await request(`/stream/${encodeURIComponent(String(epId))}`, options);
-  return typeof data?.url === 'string' ? proxyStreamUrl(data.url) : null;
+  const id = encodeURIComponent(String(epId));
+  const data = await request(`/stream/${id}`, options);
+  const rawSubtitles = Array.isArray(data?.subtitles)
+    ? data.subtitles
+    : await request(`/stream/${id}/subtitles`, options).then((result) => result?.subtitles).catch(() => []);
+  const subtitles = Array.isArray(rawSubtitles)
+    ? rawSubtitles.flatMap((subtitle) => {
+      if (!subtitle?.url) return [];
+      return [{ ...subtitle, lang: subtitle.lang || subtitle.language || 'en', url: `/api/stream?subtitle=${encodeURIComponent(subtitle.url)}` }];
+    })
+    : [];
+  return typeof data?.url === 'string'
+    ? { url: proxyStreamUrl(data.url), subtitles }
+    : null;
 }
 
 export async function resolveEpisodeStream(episodeUrl, options) {

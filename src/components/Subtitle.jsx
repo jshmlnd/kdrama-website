@@ -1,7 +1,7 @@
 export function SubtitleTrack({ subtitle }) {
   if (!subtitle?.url) return null;
 
-  return <track kind="subtitles" src={subtitle.url} srcLang={subtitle.lang || 'en'} label={subtitle.label || subtitle.lang?.toUpperCase() || 'Subtitles'} />;
+  return <track default kind="subtitles" src={subtitle.url} srcLang={subtitle.lang || 'en'} label={subtitle.label || subtitle.lang?.toUpperCase() || 'Subtitles'} />;
 }
 
 export default function Subtitle({ text }) {

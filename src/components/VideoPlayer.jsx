@@ -23,6 +23,7 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
   const [captions, setCaptions] = useState(Boolean(subtitles.length));
   const [captionText, setCaptionText] = useState('');
   const [fullscreen, setFullscreen] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
 
   function clearHideTimer() {
     clearTimeout(hideTimer.current);
@@ -36,8 +37,6 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
       hideTimer.current = setTimeout(() => setControlsVisible(false), 3000);
     }
   }
-
-  const [controlsVisible, setControlsVisible] = useState(true);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -62,20 +61,26 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
     video.addEventListener('pause', onPause);
     video.addEventListener('ended', onEnded);
     video.addEventListener('volumechange', onVolume);
+    const onVideoError = () => onError?.();
+    video.addEventListener('error', onVideoError);
 
-    import('hls.js').then(({ default: Hls }) => {
-      if (cancelled) return;
-      if (Hls.isSupported()) {
-        hls = new Hls();
-        hls.on(Hls.Events.ERROR, (_, data) => data.fatal && onError?.());
-        hls.loadSource(src);
-        hls.attachMedia(video);
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = src;
-      } else {
-        onError?.();
-      }
-    }).catch(() => onError?.());
+    if (/\.m3u8/i.test(src)) {
+      import('hls.js').then(({ default: Hls }) => {
+        if (cancelled) return;
+        if (Hls.isSupported()) {
+          hls = new Hls();
+          hls.on(Hls.Events.ERROR, (_, data) => data.fatal && onError?.());
+          hls.loadSource(src);
+          hls.attachMedia(video);
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = src;
+        } else {
+          onError?.();
+        }
+      }).catch(() => onError?.());
+    } else {
+      video.src = src;
+    }
 
     return () => {
       cancelled = true;
@@ -91,6 +96,7 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
       video.removeEventListener('pause', onPause);
       video.removeEventListener('ended', onEnded);
       video.removeEventListener('volumechange', onVolume);
+      video.removeEventListener('error', onVideoError);
     };
   }, [src, onError]);
 
@@ -124,26 +130,36 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return undefined;
-    const tracks = Array.from(video.textTracks);
     const updateCaption = () => {
       if (!captions) {
         setCaptionText('');
         return;
       }
+      const tracks = Array.from(video.textTracks);
       const track = tracks.find((item) => item.activeCues?.length);
       const text = track ? Array.from(track.activeCues).map((cue) => String(cue.text).replace(/<[^>]*>/g, '')).join('\n') : '';
       setCaptionText(text);
     };
+    const tracks = Array.from(video.textTracks);
     tracks.forEach((track) => track.addEventListener('cuechange', updateCaption));
+    video.addEventListener('timeupdate', updateCaption);
+    video.addEventListener('loadeddata', updateCaption);
     updateCaption();
-    return () => tracks.forEach((track) => track.removeEventListener('cuechange', updateCaption));
+    return () => {
+      tracks.forEach((track) => track.removeEventListener('cuechange', updateCaption));
+      video.removeEventListener('timeupdate', updateCaption);
+      video.removeEventListener('loadeddata', updateCaption);
+    };
   }, [captions, subtitles, src]);
 
   useEffect(() => {
     const onFullscreen = () => setFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement));
     document.addEventListener('fullscreenchange', onFullscreen);
     document.addEventListener('webkitfullscreenchange', onFullscreen);
-    return () => document.removeEventListener('fullscreenchange', onFullscreen);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreen);
+      document.removeEventListener('webkitfullscreenchange', onFullscreen);
+    };
   }, []);
 
   const lastTap = useRef(0);

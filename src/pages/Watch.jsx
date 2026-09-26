@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Check, Info, Link2, LockKeyhole, Play, Send, Share2, Star } from 'lucide-react';
-import { fetchDrama, fetchStream, resolveEpisodeStream } from '../lib/api.js';
+import { fetchDrama, fetchStream, resolveEpisodeStream, seasonFrom } from '../lib/api.js';
 import Nav from '../components/Nav.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 import { routes } from '../lib/routes.js';
@@ -21,19 +21,21 @@ export default function Watch({ ...navProps }) {
     const controller = new AbortController();
     setDrama(null);
     setDetailStatus('loading');
-    fetchDrama(slug, { signal: controller.signal })
+    fetchDrama(slug)
       .then((result) => {
+        if (controller.signal.aborted) return;
         if (!result) throw new Error('Drama not found');
         setDrama(result);
         setDetailStatus('ready');
       })
       .catch((error) => {
-        if (error.name !== 'AbortError') setDetailStatus('error');
+        if (!controller.signal.aborted) setDetailStatus('error');
       });
     return () => controller.abort();
   }, [slug]);
 
   const activeEpisode = drama?.episodes.find((episode) => episode.number === requestedEpisode) ?? drama?.episodes[0];
+  const season = drama ? seasonFrom(drama.slug) || seasonFrom(drama.title) : '';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -77,7 +79,7 @@ export default function Watch({ ...navProps }) {
       <main className="mx-auto max-w-7xl px-4 pb-16 pt-7 sm:px-6 lg:px-8">
         <div className="mb-6 flex items-center justify-between gap-4">
           <Link to={routes.discover} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-content transition hover:text-white"><ArrowLeft size={16} /> Back to discover</Link>
-          <span className="hidden items-center gap-2 text-xs text-neutral-content sm:flex"><span className="size-1.5 rounded-full bg-primary shadow-[0_0_10px_#ff4d8d]" /> MeiDrama player</span>
+          <span className="hidden items-center gap-2 text-xs text-neutral-content sm:flex"><span className="size-1.5 animate-pulse rounded-full bg-primary shadow-[0_0_10px_#ff4d8d]" /> MeiDrama player</span>
         </div>
 
         {detailStatus === 'loading' && <div className="glass rounded-2xl p-12 text-center text-sm text-neutral-content">Loading drama details...</div>}
@@ -114,8 +116,8 @@ export default function Watch({ ...navProps }) {
             </section>
 
             <aside className="glass h-fit rounded-2xl p-4 sm:p-5">
-              {/* ponytail: /drama/:slug returns one flat season list; render a real season selector when the API exposes seasons */}
-              <div className="flex items-center justify-between"><div><p className="text-sm font-bold text-white">Episodes</p><p className="mt-1 text-xs text-neutral-content">{drama.episodes.length} available</p></div><span className="rounded-lg border border-white/10 px-2.5 py-2 text-xs text-neutral-content">Season 1</span></div>
+              {/* ponytail: /drama/:slug exposes no season field — season is derived from slug/title, hidden when unmarked */}
+              <div className="flex items-center justify-between"><div><p className="text-sm font-bold text-white">Episodes</p><p className="mt-1 text-xs text-neutral-content">{drama.episodes.length} available</p></div>{season && <span className="rounded-lg border border-white/10 px-2.5 py-2 text-xs text-neutral-content">Season {season}</span>}</div>
               <div className="mt-5 max-h-[31rem] space-y-1.5 overflow-y-auto pr-1">
                 {drama.episodes.map((episode, index) => {
                   const number = episode.number || String(index + 1);
