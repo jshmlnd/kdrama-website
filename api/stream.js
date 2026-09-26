@@ -33,7 +33,10 @@ function proxyUrl(target, referrer, type = 'media') {
 
 async function getJson(url, headers = {}) {
   const response = await fetch(url, { headers: { 'user-agent': USER_AGENT, ...headers } });
-  if (!response.ok) throw new Error(`Upstream ${response.status}`);
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Upstream ${response.status}: ${body.slice(0, 120)}`);
+  }
   return response.json();
 }
 
