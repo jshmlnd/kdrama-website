@@ -37,22 +37,39 @@ async function getJson(url, headers = {}) {
   return response.json();
 }
 
+async function resolverGet(path) {
+  const attempt = (url) => getJson(url, RESOLVER_HEADERS);
+  try {
+    return await attempt(`${RESOLVER}${path}`);
+  } catch (direct) {
+    // Vercel's egress is blocked by the resolver; the worker's Cloudflare
+    // egress gets through (verified). Detailed error if both routes fail.
+    try {
+      return await attempt(`${WORKER}/resolver?src=${encodeURIComponent(`${RESOLVER}${path}`)}`);
+    } catch (viaWorker) {
+      throw new Error(`resolver failed ${path} (direct: ${direct.cause?.code || direct.message}; worker: ${viaWorker.cause?.code || viaWorker.message})`);
+    }
+  }
+}
+
 function resolverDetail(slug, number) {
   const core = slug.replace(/-20\d{2}$/i, '');
   const hasEpisode = (data) => data?.episodes?.some((episode) => String(episode.number) === number);
-  const detail = (candidate) => getJson(`${RESOLVER}/drama/detail?slug=${encodeURIComponent(candidate)}`, RESOLVER_HEADERS).catch(() => null);
+  let lastError = null;
+  const detail = (candidate) => resolverGet(`/drama/detail?slug=${encodeURIComponent(candidate)}`).catch((e) => { lastError = e; return null; });
 
   return (async () => {
     for (const candidate of [...new Set([slug, core])]) {
       const data = await detail(candidate);
       if (hasEpisode(data)) return data;
     }
-    const search = await getJson(`${RESOLVER}/drama/search?q=${encodeURIComponent(core.replace(/-/g, ' '))}&page=1`, RESOLVER_HEADERS).catch(() => null);
+    const search = await resolverGet(`/drama/search?q=${encodeURIComponent(core.replace(/-/g, ' '))}&page=1`).catch((e) => { lastError = e; return null; });
     for (const item of Array.isArray(search?.body) ? search.body : []) {
       if (!item?.slug?.startsWith(core)) continue;
       const data = await detail(item.slug);
       if (hasEpisode(data)) return data;
     }
+    if (lastError) throw lastError;
     return null;
   })();
 }
