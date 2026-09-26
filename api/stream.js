@@ -98,6 +98,18 @@ async function resolveEpisode(raw) {
   if (!match) throw new Error('Unsupported episode URL');
   const [, slug, number] = match;
 
+  // myasiantv pages embed the kisskh id (data-video); the resolver API 403s
+  // datacenter egress (Vercel and most worker egress get CF-challenged), so
+  // scrape the id off the source page and skip the resolver entirely
+  const page = await fetch(source.href, { headers: { 'user-agent': USER_AGENT } })
+    .then((r) => (r.ok ? r.text() : ''))
+    .catch(() => '');
+  const pageKisskhId = page.match(/kisskh-player\.php\?ep=(\d+)/)?.[1];
+  if (pageKisskhId) {
+    const result = await tryKisskh(pageKisskhId, source, slug, number);
+    if (result) return result;
+  }
+
   const detail = await resolverDetail(slug, number);
   if (!detail) throw new Error('Drama not found in resolver');
   const episode = detail.episodes.find((item) => String(item.number) === number);
@@ -108,14 +120,8 @@ async function resolveEpisode(raw) {
   // overlay; kisskh serves soft subs alongside, exposed by myasiantv's player
   const kisskhEntry = episode.streamUrls.find((entry) => entry?.source === 'kisskh' && entry?.id);
   if (kisskhEntry) {
-    const kisskh = await kisskhPlayer(kisskhEntry.id, source.href).catch(() => null);
-    if (kisskh?.media) {
-      console.warn(`[stream] ${source.pathname} via kisskh ${kisskhEntry.id}`);
-      return {
-        url: proxyUrl(kisskh.media, KISSKH_REFERRER),
-        subtitles: kisskh.subtitles.length ? kisskh.subtitles : await synthSubtitles(slug, number),
-      };
-    }
+    const result = await tryKisskh(kisskhEntry.id, source, slug, number);
+    if (result) return result;
   }
 
   let media = '';
@@ -139,6 +145,16 @@ async function resolveEpisode(raw) {
   if (!subtitles.length) subtitles = await synthSubtitles(slug, number);
 
   return { url: proxyUrl(media, KISSKH_REFERRER), subtitles };
+}
+
+async function tryKisskh(id, source, slug, number) {
+  const kisskh = await kisskhPlayer(id, source.href).catch(() => null);
+  if (!kisskh?.media) return null;
+  console.warn(`[stream] ${source.pathname} via kisskh ${id}`);
+  return {
+    url: proxyUrl(kisskh.media, KISSKH_REFERRER),
+    subtitles: kisskh.subtitles.length ? kisskh.subtitles : await synthSubtitles(slug, number),
+  };
 }
 
 async function kisskhPlayer(id, referer) {
