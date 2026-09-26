@@ -1,9 +1,14 @@
+import { Readable } from 'node:stream';
+
 const SOURCES = new Set(['myasiantv.com.lv']);
-const PLAYER = new Set(['catalog.dramavibe.cfd']);
-const MEDIA = new Set(['cdn.dramav2.xyz', 'cdn.drama3.click', 'storage.dramavibe.cfd']);
-const SUBTITLE_API = new Set(['storage.dramavibe.cfd']);
-// ponytail: season hardcoded to 1 — resolver API only exposes a flat season list; pass season params for real multi-season support
+const PLAYER = new Set(['catalog.dramavibe.cfd', 'kisskh.casa']);
+const MEDIA = new Set(['*.asiaflix.in', 'cdn.dramav2.xyz', 'cdn.drama3.click', 'storage.dramavibe.cfd', 'hls.cdnvideo11.shop', '*.streamingvideofaster1.site']);
 const SUBTITLE_FALLBACK = new Set(['kdramaapi.joshuaklein-malonda.workers.dev']);
+const SUBTITLE_SERVICE = new Set(['sub.cdnvideo11.shop', 'auto.cdnvideo11.shop']);
+const RESOLVER = 'https://api.dramacool.rest/v1';
+const WORKER = 'https://kdramaapi.joshuaklein-malonda.workers.dev';
+const RESOLVER_HEADERS = { 'x-access-control': 'web', origin: 'https://kisskh.casa', referer: 'https://kisskh.casa/' };
+const KISSKH_REFERRER = 'https://kisskh.casa/';
 const USER_AGENT = 'Mozilla/5.0 (compatible; MeiDrama/1.0)';
 
 function value(value) {
@@ -13,7 +18,9 @@ function value(value) {
 function allowed(raw, hosts) {
   try {
     const url = new URL(raw);
-    return url.protocol === 'https:' && hosts.has(url.hostname) ? url : null;
+    if (url.protocol !== 'https:') return null;
+    const match = hosts.has(url.hostname) || [...hosts].some((host) => host.startsWith('*.') && url.hostname.endsWith(host.slice(1)));
+    return match ? url : null;
   } catch {
     return null;
   }
@@ -24,69 +31,131 @@ function proxyUrl(target, referrer, type = 'media') {
   return `/api/stream?${key}=${encodeURIComponent(target)}&ref=${encodeURIComponent(referrer)}`;
 }
 
-async function getText(url, headers = {}) {
-  const response = await fetch(url, { headers: { 'user-agent': USER_AGENT, ...headers } });
-  if (!response.ok) throw new Error(`Upstream ${response.status}`);
-  return { text: await response.text(), url: response.url || url };
-}
-
 async function getJson(url, headers = {}) {
   const response = await fetch(url, { headers: { 'user-agent': USER_AGENT, ...headers } });
   if (!response.ok) throw new Error(`Upstream ${response.status}`);
   return response.json();
 }
 
-async function workerSubtitles(m3u8Href, sourcePathname) {
-  const basePath = sourcePathname.replace(/^\/|\/$/g, '');
-  const match = basePath.match(/^(.+?)-episode-(\d+)$/);
-  if (!match) return [];
-  const id = `${match[1].replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-e${match[2]}`;
-  const captured = await fetch(`https://kdramaapi.joshuaklein-malonda.workers.dev/stream/${id}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ url: m3u8Href, query: match[1].replace(/-/g, ' '), season: '1', episode: Number(match[2]) }),
-  });
-  if (!captured.ok) return [];
-  const list = await fetch(`https://kdramaapi.joshuaklein-malonda.workers.dev/stream/${id}/subtitles`);
-  const data = list.ok ? await list.json() : null;
-  return Array.isArray(data?.subtitles)
-    ? data.subtitles.flatMap((subtitle) => subtitle?.url && subtitle?.lang
-      ? [{ lang: subtitle.lang, label: subtitle.label || subtitle.lang.toUpperCase(), url: proxyUrl(subtitle.url, '', 'subtitle') }]
-      : [])
-    : [];
+function resolverDetail(slug, number) {
+  const core = slug.replace(/-20\d{2}$/i, '');
+  const hasEpisode = (data) => data?.episodes?.some((episode) => String(episode.number) === number);
+  const detail = (candidate) => getJson(`${RESOLVER}/drama/detail?slug=${encodeURIComponent(candidate)}`, RESOLVER_HEADERS).catch(() => null);
+
+  return (async () => {
+    for (const candidate of [...new Set([slug, core])]) {
+      const data = await detail(candidate);
+      if (hasEpisode(data)) return data;
+    }
+    const search = await getJson(`${RESOLVER}/drama/search?q=${encodeURIComponent(core.replace(/-/g, ' '))}&page=1`, RESOLVER_HEADERS).catch(() => null);
+    for (const item of Array.isArray(search?.body) ? search.body : []) {
+      if (!item?.slug?.startsWith(core)) continue;
+      const data = await detail(item.slug);
+      if (hasEpisode(data)) return data;
+    }
+    return null;
+  })();
+}
+
+function streamRequest(entry) {
+  const source = String(entry?.source || '').toLowerCase();
+  const url = String(entry?.url || '');
+  const lower = url.toLowerCase();
+  if (source === 'kisskh' && entry?.id) return { server: 'kisskh', value: String(entry.id) };
+  if (source.includes('asiaflix')) return { server: source.split('-').pop(), value: url };
+  if (['streamwish', 'vidhide', 'mixdrop', 'streamtape'].includes(source)) return { server: source, value: url };
+  if (lower.includes('vidmoly')) return { server: 'vidmoly', value: url };
+  if (lower.includes('dramacool.men')) return { server: 'dramacool.men', value: url };
+  if (lower.includes('asianload.cfd')) return { server: 'asianload.cfd', value: url };
+  if (lower.includes('vidbasic')) return { server: 'vidbasic', value: url };
+  return null;
 }
 
 async function resolveEpisode(raw) {
   const source = allowed(raw, SOURCES);
   if (!source) throw new Error('Unsupported episode source');
-  const page = await getText(source.href);
-  const iframeMatch = page.text.match(/<iframe\b[^>]*\bsrc=["']([^"']+)/i);
-  const iframe = iframeMatch && allowed(new URL(iframeMatch[1].replace(/&amp;/g, '&'), page.url).href, PLAYER);
-  if (!iframe) throw new Error('Player not found');
+  const match = source.pathname.replace(/^\/|\/$/g, '').match(/^(.+?)-episode-(\d+)$/);
+  if (!match) throw new Error('Unsupported episode URL');
+  const [, slug, number] = match;
 
-  const embed = await getText(iframe.href, { referer: source.href });
-  const playlistMatch = embed.text.match(/(?:window\.__playlist|var\s+src)\s*=\s*["']([^"']+\.m3u8[^"']*)/i);
-  const playlist = playlistMatch && allowed(new URL(playlistMatch[1], embed.url).href, MEDIA);
-  if (!playlist) throw new Error('Playlist not found');
+  const detail = await resolverDetail(slug, number);
+  if (!detail) throw new Error('Drama not found in resolver');
+  const episode = detail.episodes.find((item) => String(item.number) === number);
+  if (!episode?.streamUrls?.length) throw new Error('Episode has no stream sources');
 
-  let subtitles = [];
-  const subtitleMatch = embed.text.match(/var\s+subApi\s*=\s*["']([^"']+)/i);
-  const subtitleApi = subtitleMatch && allowed(new URL(subtitleMatch[1], embed.url).href, SUBTITLE_API);
-  if (subtitleMatch) {
-    try {
-      const list = await getJson(subtitleApi.href, { referer: iframe.href, origin: iframe.origin });
-      subtitles = Array.isArray(list)
-        ? list.flatMap((subtitle) => {
-          const url = allowed(subtitle?.url, MEDIA);
-          return url ? [{ lang: subtitle.lang, label: subtitle.lang?.toUpperCase(), url: proxyUrl(url.href, iframe.href, 'subtitle') }] : [];
-        })
-        : [];
-    } catch {}
+  // kisskh's own stream is clean — the resolver's mxcontent/mixdrop rips burn
+  // English captions into the pixels (frame-verified), which duplicates our
+  // overlay; kisskh serves soft subs alongside, exposed by myasiantv's player
+  const kisskhEntry = episode.streamUrls.find((entry) => entry?.source === 'kisskh' && entry?.id);
+  if (kisskhEntry) {
+    const kisskh = await kisskhPlayer(kisskhEntry.id, source.href).catch(() => null);
+    if (kisskh?.media) {
+      console.warn(`[stream] ${source.pathname} via kisskh ${kisskhEntry.id}`);
+      return {
+        url: proxyUrl(kisskh.media, KISSKH_REFERRER),
+        subtitles: kisskh.subtitles.length ? kisskh.subtitles : await synthSubtitles(slug, number),
+      };
+    }
   }
 
-  if (!subtitles.length) subtitles = await workerSubtitles(playlist.href, source.pathname).catch(() => []);
+  let media = '';
+  let tracks = [];
+  for (const entry of episode.streamUrls) {
+    const request = streamRequest(entry);
+    if (!request) continue;
+    const url = `${RESOLVER}/drama/get-stream-url?value=${encodeURIComponent(Buffer.from(request.value).toString('base64'))}&server=${encodeURIComponent(request.server)}`;
+    const data = await getJson(url, RESOLVER_HEADERS).catch(() => null);
+    if (data?.sources?.[0]?.url) { media = data.sources[0].url; tracks = data.subtitles || []; break; }
+  }
+  if (!media) throw new Error('All stream sources failed');
+  console.warn(`[stream] resolved ${source.pathname} via ${media.slice(0, 80)}`);
 
-  return { url: proxyUrl(playlist.href, iframe.href), subtitles };
+  // resolver media servers often return no tracks; the worker synthesizes an
+  // English list from sub.cdnvideo11's <Kebab-Title>.Ep<N>_eng.srt[.txt] pattern
+  // (verified live) on a host SUBTITLE_FALLBACK already allows
+  let subtitles = tracks.flatMap((subtitle) => subtitle?.url
+    ? [{ lang: subtitle.lang || subtitle.language || 'en', label: subtitle.label || 'EN', url: proxyUrl(subtitle.url, '', 'subtitle') }]
+    : []);
+  if (!subtitles.length) subtitles = await synthSubtitles(slug, number);
+
+  return { url: proxyUrl(media, KISSKH_REFERRER), subtitles };
+}
+
+async function kisskhPlayer(id, referer) {
+  // myasiantv intermittently truncates this page under load (534-byte shell,
+  // no vars) — retry rather than silently falling back to the hardsubbed rip
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (attempt) await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+    const response = await fetch(`https://myasiantv.com.lv/wp-content/themes/alidramacool/kisskh-player.php?ep=${encodeURIComponent(id)}`, {
+      headers: { 'user-agent': USER_AGENT, referer },
+    }).catch(() => null);
+    if (!response?.ok) continue;
+    const html = await response.text();
+    const media = html.match(/var src = "([^"]+)"/)?.[1]?.replace(/\\\//g, '/');
+    if (!media) continue;
+    let list = [];
+    try { list = JSON.parse(html.match(/var subtitleList = (\[[^\n]+\]);/)?.[1] || '[]'); } catch {}
+    const subtitles = list.flatMap((subtitle) => subtitle?.url
+      ? [{ lang: subtitle.land || 'en', label: subtitle.label || 'EN', url: proxyUrl(`${WORKER}/kisskh/srt?src=${encodeURIComponent(subtitle.url)}`, '', 'subtitle') }]
+      : []);
+    return { media, subtitles };
+  }
+  return null;
+}
+
+async function synthSubtitles(slug, number) {
+  try {
+    const response = await fetch(`${WORKER}/kisskh/${slug}/${number}/subtitles`, {
+      headers: { 'user-agent': USER_AGENT },
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return (Array.isArray(data?.subtitles) ? data.subtitles : []).flatMap((subtitle) => subtitle?.url
+      ? [{ lang: subtitle.language || subtitle.lang || 'en', label: subtitle.label || 'EN', url: proxyUrl(subtitle.url, '', 'subtitle') }]
+      : []);
+  } catch {
+    return [];
+  }
 }
 
 function rewriteManifest(text, base, referrer) {
@@ -116,8 +185,8 @@ export default async function handler(req, res) {
 
     const subtitle = value(req.query?.subtitle);
     const raw = subtitle || value(req.query?.url);
-    const target = allowed(raw, MEDIA) ?? allowed(raw, SUBTITLE_FALLBACK);
-    const referrer = allowed(value(req.query?.ref) || 'https://catalog.dramavibe.cfd/player_embed.php', PLAYER);
+    const target = allowed(raw, MEDIA) ?? allowed(raw, SUBTITLE_FALLBACK) ?? allowed(raw, SUBTITLE_SERVICE);
+    const referrer = allowed(value(req.query?.ref) || KISSKH_REFERRER, PLAYER);
     if (!target || !referrer) return res.status(400).json({ error: 'invalid media URL' });
 
     const upstream = await fetch(target.href, {
@@ -147,8 +216,17 @@ export default async function handler(req, res) {
       return res.status(200).send(rewriteManifest(await upstream.text(), target.href, referrer.href));
     }
 
+    for (const name of ['content-range', 'content-length', 'accept-ranges']) {
+      const header = upstream.headers.get(name);
+      if (header) res.setHeader(name, header);
+    }
     res.setHeader('Content-Type', type);
-    return res.status(200).send(Buffer.from(await upstream.arrayBuffer()));
+    res.status(upstream.status);
+    const body = Readable.fromWeb(upstream.body);
+    if (typeof res.stream === 'function') return res.stream(body);
+    res.on('close', () => body.destroy());
+    await new Promise((done) => { body.on('error', done); body.pipe(res).on('finish', done).on('close', done); });
+    return res;
   } catch (error) {
     return res.status(502).json({ error: error.message || 'stream unavailable' });
   }

@@ -24,6 +24,10 @@ function streamApi() {
           send(body) {
             response.end(body);
           },
+          stream(body) {
+            response.on('close', () => body.destroy());
+            body.pipe(response);
+          },
         };
 
         try {
