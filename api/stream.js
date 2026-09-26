@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 
 const SOURCES = new Set(['myasiantv.com.lv']);
 const PLAYER = new Set(['catalog.dramavibe.cfd', 'kisskh.casa']);
-const MEDIA = new Set(['*.asiaflix.in', 'cdn.dramav2.xyz', 'cdn.drama3.click', 'storage.dramavibe.cfd', 'hls.cdnvideo11.shop', '*.streamingvideofaster1.site']);
+const MEDIA = new Set(['*.asiaflix.in', 'cdn.dramav2.xyz', 'cdn.drama3.click', 'storage.dramavibe.cfd', '*.cdnvideo11.shop', '*.streamingvideofaster1.site', '*.videocdndelivery05.site']);
 const SUBTITLE_FALLBACK = new Set(['kdramaapi.joshuaklein-malonda.workers.dev']);
 const SUBTITLE_SERVICE = new Set(['sub.cdnvideo11.shop', 'auto.cdnvideo11.shop']);
 const RESOLVER = 'https://api.dramacool.rest/v1';
@@ -43,14 +43,15 @@ async function getJson(url, headers = {}) {
 async function resolverGet(path) {
   const attempt = (url) => getJson(url, RESOLVER_HEADERS);
   try {
-    return await attempt(`${RESOLVER}${path}`);
-  } catch (direct) {
-    // Vercel's egress is blocked by the resolver; the worker's Cloudflare
-    // egress gets through (verified). Detailed error if both routes fail.
+    // Vercel's egress (and now Cloudflare's) gets CF-challenged by the
+    // resolver; the worker passthrough is the route that answers. Detailed
+    // error if both routes fail.
+    return await attempt(`${WORKER}/resolver?src=${encodeURIComponent(`${RESOLVER}${path}`)}`);
+  } catch (viaWorker) {
     try {
-      return await attempt(`${WORKER}/resolver?src=${encodeURIComponent(`${RESOLVER}${path}`)}`);
-    } catch (viaWorker) {
-      throw new Error(`resolver failed ${path} (direct: ${direct.cause?.code || direct.message}; worker: ${viaWorker.cause?.code || viaWorker.message})`);
+      return await attempt(`${RESOLVER}${path}`);
+    } catch (direct) {
+      throw new Error(`resolver failed ${path} (worker: ${viaWorker.cause?.code || viaWorker.message}; direct: ${direct.cause?.code || direct.message})`);
     }
   }
 }
@@ -100,12 +101,17 @@ async function resolveEpisode(raw) {
 
   // myasiantv pages embed the kisskh id (data-video); the resolver API 403s
   // datacenter egress (Vercel and most worker egress get CF-challenged), so
-  // scrape the id off the source page and skip the resolver entirely
-  const page = await fetch(source.href, { headers: { 'user-agent': USER_AGENT } })
-    .then((r) => (r.ok ? r.text() : ''))
-    .catch(() => '');
-  const pageKisskhId = page.match(/kisskh-player\.php\?ep=(\d+)/)?.[1];
-  if (pageKisskhId) {
+  // scrape the id off the source page and skip the resolver entirely.
+  // myasiantv intermittently serves a truncated shell and its player page
+  // flakes too, so retry the whole kisskh path — one miss drops us onto the
+  // resolver, which 403s and turns into a 502.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+    const page = await fetch(source.href, { headers: { 'user-agent': USER_AGENT } })
+      .then((r) => (r.ok ? r.text() : ''))
+      .catch(() => '');
+    const pageKisskhId = page.match(/kisskh-player\.php\?ep=(\d+)/)?.[1];
+    if (!pageKisskhId) continue;
     const result = await tryKisskh(pageKisskhId, source, slug, number);
     if (result) return result;
   }
@@ -264,6 +270,7 @@ export default async function handler(req, res) {
     await new Promise((done) => { body.on('error', done); body.pipe(res).on('finish', done).on('close', done); });
     return res;
   } catch (error) {
+    console.error('[stream]', error.message);
     return res.status(502).json({ error: error.message || 'stream unavailable' });
   }
 }
