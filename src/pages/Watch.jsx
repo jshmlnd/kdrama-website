@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
-import { ArrowLeft, Check, Info, Link2, LockKeyhole, Play, Send, Share2, Star } from 'lucide-react';
+import { ArrowLeft, Check, LockKeyhole, Play, Share2 } from 'lucide-react';
 import { fetchDrama, fetchStream, resolveEpisodeStream, seasonFrom } from '../lib/api.js';
 import Nav from '../components/Nav.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
@@ -28,7 +28,7 @@ export default function Watch({ ...navProps }) {
         setDrama(result);
         setDetailStatus('ready');
       })
-      .catch((error) => {
+      .catch((_error) => {
         if (!controller.signal.aborted) setDetailStatus('error');
       });
     return () => controller.abort();
@@ -89,7 +89,10 @@ export default function Watch({ ...navProps }) {
             <section>
               <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#110b15] shadow-2xl shadow-black/30">
                 <div className="flex items-center justify-between border-b border-white/8 px-4 py-3 sm:px-5">
-                  <div className="min-w-0"><p className="truncate text-sm font-bold text-white">{drama.title}</p><p className="mt-0.5 text-[11px] text-neutral-content">Episode {activeEpisode?.number || '-'} · {drama.status || 'Catalog title'}</p></div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-white">{drama.title}</p>
+                    <p className="mt-0.5 text-[11px] text-neutral-content">Episode {activeEpisode?.number || '-'} · {drama.status || 'Catalog title'}</p>
+                  </div>
                   <button type="button" aria-label="Share episode" onClick={shareEpisode} className="grid size-9 place-items-center rounded-lg text-neutral-content transition hover:bg-white/8 hover:text-white"><Share2 size={16} /></button>
                 </div>
                 {src && !playerError ? <VideoPlayer title={`${drama.title} episode ${activeEpisode?.number || ''}`} src={src} subtitles={subtitles} onError={() => setPlayerError(true)} onNotify={navProps.onNotify} /> : (
@@ -104,28 +107,45 @@ export default function Watch({ ...navProps }) {
                 )}
               </div>
 
-              <div id="details" className="scroll-mt-28 mt-6 flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-content"><span className="rounded-full bg-primary/12 px-2.5 py-1 font-bold text-primary">Episode {activeEpisode?.number || '-'}</span>{drama.year && <span>{drama.year}</span>}{drama.status && <span>{drama.status}</span>}{drama.network && <span>{drama.network}</span>}</div>
-                  <h1 className="mt-3 text-2xl font-bold tracking-tight text-white sm:text-3xl">{drama.title}</h1>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-content">{drama.synopsis || `Settle in for episode ${activeEpisode?.number || 'one'} of ${drama.title}.`}</p>
-                  <p className="mt-3 text-xs text-neutral-content">{drama.genres.join(' · ')}{drama.country ? ` · ${drama.country}` : ''}</p>
+              <div id="details" className="scroll-mt-28 mt-6">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-content">
+                  <span className="rounded-full bg-primary/12 px-2.5 py-1 font-bold text-primary">Episode {activeEpisode?.number || '-'}</span>
+                  {drama.year && <span>{drama.year}</span>}
+                  {drama.status && <span>{drama.status}</span>}
+                  {drama.network && <span>{drama.network}</span>}
                 </div>
-                <div className="flex shrink-0 gap-2"><button type="button" onClick={() => document.getElementById('details')?.scrollIntoView()} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-xs font-bold text-white transition hover:bg-white/10"><Info size={15} /> Details</button></div>
+                <h1 className="mt-3 text-2xl font-bold tracking-tight text-white sm:text-3xl">{drama.title}</h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-content">{drama.synopsis || `Settle in for episode ${activeEpisode?.number || 'one'} of ${drama.title}.`}</p>
+                <p className="mt-3 text-xs text-neutral-content">{drama.genres.join(' · ')}{drama.country ? ` · ${drama.country}` : ''}</p>
               </div>
             </section>
 
             <aside className="glass h-fit rounded-2xl p-4 sm:p-5">
               {/* ponytail: /drama/:slug exposes no season field — season is derived from slug/title, hidden when unmarked */}
-              <div className="flex items-center justify-between"><div><p className="text-sm font-bold text-white">Episodes</p><p className="mt-1 text-xs text-neutral-content">{drama.episodes.length} available</p></div>{season && <span className="rounded-lg border border-white/10 px-2.5 py-2 text-xs text-neutral-content">Season {season}</span>}</div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-white">Episodes</p>
+                  <p className="mt-1 text-xs text-neutral-content">{drama.episodes.length} available</p>
+                </div>
+                {season && <span className="rounded-lg border border-white/10 px-2.5 py-2 text-xs text-neutral-content">Season {season}</span>}
+              </div>
               <div className="mt-5 max-h-[31rem] space-y-1.5 overflow-y-auto pr-1">
                 {drama.episodes.map((episode, index) => {
                   const number = episode.number || String(index + 1);
                   const active = activeEpisode === episode;
-                  return <Link key={`${episode.url}-${number}`} to={routes.watch(slug, number)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${active ? 'bg-primary/12 text-white' : 'text-neutral-content hover:bg-white/6 hover:text-white'}`}><span className={`grid size-7 place-items-center rounded-lg text-xs font-bold ${active ? 'bg-primary text-primary-content' : 'bg-white/7'}`}>{active ? <Check size={14} /> : number}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">Episode {number}</span><span className="mt-0.5 block text-[10px] opacity-70">{episode.id ? 'Stream available' : 'Stream Available'}</span></span>{active && <Play size={13} fill="currentColor" />}</Link>;
+                  return (
+                    <Link key={`${episode.url}-${number}`} to={routes.watch(slug, number)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${active ? 'bg-primary/12 text-white' : 'text-neutral-content hover:bg-white/6 hover:text-white'}`}>
+                      <span className={`grid size-7 shrink-0 place-items-center rounded-lg text-xs font-bold ${active ? 'bg-primary text-primary-content' : 'bg-white/7'}`}>{active ? <Check size={14} /> : number}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-semibold">Episode {number}</span>
+                        <span className="mt-0.5 block text-[10px] opacity-70">{episode.id ? 'Stream available' : 'Stream unavailable'}</span>
+                      </span>
+                      {active && <Play size={13} fill="currentColor" />}
+                    </Link>
+                  );
                 })}
               </div>
-              <p className="mt-4 flex items-center gap-1.5 px-2 text-[10px] leading-4 text-neutral-content">Select an episode.</p>
+              <p className="mt-4 px-2 text-[10px] leading-4 text-neutral-content">New episodes appear here as the catalog updates.</p>
             </aside>
           </div>
         )}

@@ -21,6 +21,7 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
   const [buffered, setBuffered] = useState(0);
   const [volume, setVolume] = useState(1);
   const [captions, setCaptions] = useState(Boolean(subtitles.length));
+  const [trackIndex, setTrackIndex] = useState(0);
   const [captionText, setCaptionText] = useState('');
   const [fullscreen, setFullscreen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -108,6 +109,7 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
     setControlsVisible(true);
     clearHideTimer();
     setCaptions(Boolean(subtitles.length));
+    setTrackIndex(0);
     setCaptionText('');
   }, [src, subtitles.length]);
 
@@ -115,7 +117,7 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
     const video = videoRef.current;
     if (!video) return;
     // ponytail: iPhone native fullscreen bypasses our React overlay, so flip tracks to 'showing' for the system caption renderer there
-    const setMode = (native) => Array.from(video.textTracks).forEach((track) => { track.mode = !captions ? 'disabled' : native ? 'showing' : 'hidden'; });
+    const setMode = (native) => Array.from(video.textTracks).forEach((track, index) => { track.mode = !captions || index !== trackIndex ? 'disabled' : native ? 'showing' : 'hidden'; });
     setMode(Boolean(video.webkitDisplayingFullscreen));
     const onBegin = () => setMode(true);
     const onEnd = () => setMode(false);
@@ -125,7 +127,7 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
       video.removeEventListener('webkitbeginfullscreen', onBegin);
       video.removeEventListener('webkitendfullscreen', onEnd);
     };
-  }, [captions, subtitles]);
+  }, [captions, trackIndex, subtitles]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -136,8 +138,8 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
         return;
       }
       const tracks = Array.from(video.textTracks);
-      const track = tracks.find((item) => item.activeCues?.length);
-      const text = track ? Array.from(track.activeCues).map((cue) => String(cue.text).replace(/<[^>]*>/g, '')).join('\n') : '';
+      const track = tracks[trackIndex];
+      const text = track?.activeCues?.length ? Array.from(track.activeCues).map((cue) => String(cue.text).replace(/<[^>]*>/g, '')).join('\n') : '';
       setCaptionText(text);
     };
     const tracks = Array.from(video.textTracks);
@@ -150,7 +152,7 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
       video.removeEventListener('timeupdate', updateCaption);
       video.removeEventListener('loadeddata', updateCaption);
     };
-  }, [captions, subtitles, src]);
+  }, [captions, trackIndex, subtitles, src]);
 
   useEffect(() => {
     const onFullscreen = () => setFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement));
@@ -228,6 +230,12 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
     setCaptions((enabled) => !enabled);
   }
 
+  function changeTrack(event) {
+    const next = Number(event.target.value);
+    setTrackIndex(next);
+    setCaptions(next >= 0 ? Boolean(subtitles.length) : false);
+  }
+
   function handleKeyDown(event) {
     if (['INPUT', 'BUTTON'].includes(event.target.tagName)) return;
     const video = videoRef.current;
@@ -249,22 +257,34 @@ export default function VideoPlayer({ src, subtitles = [], title = 'MeiDrama pla
       <Subtitle text={captionText} />
 
       {!playing && (
-        <button type="button" aria-label="Play video" onClick={togglePlay} className="absolute left-1/2 top-1/2 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-primary text-primary-content shadow-[0_0_0_10px_rgba(255,77,141,0.18),0_12px_40px_rgba(0,0,0,0.5)] transition hover:scale-105 hover:bg-[#ff679c] focus:outline-none focus:ring-2 focus:ring-white sm:size-20"><Play size={28} fill="currentColor" className="ml-1 sm:size-9" /></button>
+        <button type="button" aria-label="Play video" onClick={togglePlay} className="absolute left-1/2 top-1/2 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-primary/90 text-primary-content shadow-[0_0_0_10px_rgba(255,77,141,0.14),0_12px_40px_rgba(0,0,0,0.5)] backdrop-blur-sm transition hover:scale-105 hover:bg-primary focus:outline-none focus:ring-2 focus:ring-white sm:size-20"><Play size={28} fill="currentColor" className="ml-1 sm:size-9" /></button>
       )}
 
       <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/65 to-transparent px-3 pb-3 pt-12 transition-opacity duration-300 sm:px-5 sm:pb-4 ${controlsVisible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>
-        <div className="relative mb-3 h-1.5 rounded-full bg-white/20">
+        <div className="group/pb relative mb-3 h-1.5 rounded-full bg-white/20 transition-[height] hover:h-2.5">
           <span className="absolute inset-y-0 left-0 rounded-full bg-white/25" style={{ width: `${buffered}%` }} />
           <span className="absolute inset-y-0 left-0 rounded-full bg-primary shadow-[0_0_12px_rgba(255,77,141,0.75)]" style={{ width: `${progress}%` }} />
-          <input aria-label="Seek video" type="range" min="0" max={duration || 0} step="0.1" value={Math.min(current, duration || 0)} onChange={seek} className="absolute inset-x-0 -top-1.5 h-4 w-full cursor-pointer appearance-none bg-transparent accent-primary" />
+          <span aria-hidden className="pointer-events-none absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-[0_0_10px_rgba(255,255,255,0.8)] transition-opacity group-hover/pb:opacity-100" style={{ left: `${progress}%` }} />
+          <input aria-label="Seek video" type="range" min="0" max={duration || 0} step="0.1" value={Math.min(current, duration || 0)} onChange={seek} className="absolute inset-x-0 -top-1.5 h-5 w-full cursor-pointer appearance-none bg-transparent [&::-moz-range-thumb]:size-0 [&::-moz-range-thumb]:border-0 [&::-webkit-slider-thumb]:size-0 [&::-webkit-slider-thumb]:appearance-none" />
         </div>
         <div className="flex items-center gap-2 text-white">
           <button type="button" aria-label={playing ? 'Pause video' : 'Play video'} onClick={togglePlay} className="grid size-9 place-items-center rounded-lg transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-primary"><>{playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}</></button>
           <button type="button" aria-label={volume ? 'Mute video' : 'Unmute video'} onClick={toggleMute} className="grid size-9 place-items-center rounded-lg transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-primary">{volume ? <Volume2 size={18} /> : <VolumeX size={18} />}</button>
           <input aria-label="Volume" type="range" min="0" max="1" step="0.05" value={volume} onChange={changeVolume} className="hidden h-1 w-20 cursor-pointer accent-primary sm:block" />
-          <span className="font-mono text-[11px] text-white/75">{formatTime(current)} / {formatTime(duration)}</span>
+          <span className="ml-1 hidden font-mono text-[11px] tabular-nums text-white/80 sm:inline">{formatTime(current)} / {formatTime(duration)}</span>
+          <span className="ml-1 font-mono text-[11px] tabular-nums text-white/80 sm:hidden">{formatTime(current)}</span>
           <span className="ml-auto flex items-center gap-1">
-            {subtitles.length > 0 && <button type="button" aria-label={captions ? 'Hide subtitles' : 'Show subtitles'} aria-pressed={captions} onClick={toggleCaptions} className={`grid size-9 place-items-center rounded-lg transition focus:outline-none focus:ring-2 focus:ring-primary ${captions ? 'bg-primary text-primary-content' : 'hover:bg-white/15'}`}><Captions size={18} /></button>}
+            {subtitles.length > 0 && (
+              <span className="flex items-center gap-1">
+                {subtitles.length > 1 && (
+                  <select aria-label="Subtitle language" value={captions ? trackIndex : -1} onChange={changeTrack} className="h-9 max-w-24 cursor-pointer rounded-lg bg-white/8 px-2.5 text-xs font-semibold text-white/90 transition hover:bg-white/12 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary [&>option]:bg-[#0b0710] [&>option]:text-white">
+                    <option value={-1}>Off</option>
+                    {subtitles.map((subtitle, index) => <option key={`${subtitle.lang}-${subtitle.url}`} value={index}>{subtitle.label || subtitle.lang?.toUpperCase() || `Track ${index + 1}`}</option>)}
+                  </select>
+                )}
+                <button type="button" aria-label={captions ? 'Hide subtitles' : 'Show subtitles'} aria-pressed={captions} onClick={toggleCaptions} className={`grid size-9 place-items-center rounded-lg transition focus:outline-none focus:ring-2 focus:ring-primary ${captions ? 'bg-primary text-primary-content' : 'hover:bg-white/15'}`}><Captions size={18} /></button>
+              </span>
+            )}
             <button type="button" aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} onClick={toggleFullscreen} className="grid size-9 place-items-center rounded-lg transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-primary">{fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button>
           </span>
         </div>
