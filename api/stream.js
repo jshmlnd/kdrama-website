@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 
 const SOURCES = new Set(['myasiantv.com.lv']);
 const PLAYER = new Set(['catalog.dramavibe.cfd', 'kisskh.casa']);
-const MEDIA = new Set(['*.asiaflix.in', 'cdn.dramav2.xyz', 'cdn.drama3.click', 'storage.dramavibe.cfd', '*.cdnvideo11.shop', '*.streamingvideofaster1.site', '*.videocdndelivery05.site']);
+const MEDIA = new Set(['*.asiaflix.in', 'cdn.dramav2.xyz', 'cdn.drama3.click', 'storage.dramavibe.cfd', '*.cdnvideo11.shop', '*.streamingvideofaster1.site', '*.videocdndelivery05.site', '*.streamingcdn5.site', '*.verois1.site']);
 const SUBTITLE_FALLBACK = new Set(['kdramaapi.joshuaklein-malonda.workers.dev']);
 const SUBTITLE_SERVICE = new Set(['sub.cdnvideo11.shop', 'auto.cdnvideo11.shop']);
 const RESOLVER = 'https://api.dramacool.rest/v1';
